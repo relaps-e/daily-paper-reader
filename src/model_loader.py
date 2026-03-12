@@ -18,10 +18,23 @@ MODELSCOPE_ENDPOINT = "https://modelscope.cn/hf"
 _DEFAULT_RETRIES = 3
 _DEFAULT_HF_BACKOFF_RETRIES = 1
 _DEFAULT_REMOTE_TIMEOUT_SECONDS = 60
+_DEFAULT_REMOTE_EMBED_ENDPOINT = "https://embed.zwwen.online/embed"
+_DEFAULT_REMOTE_EMBED_KEY_FILE = "/tmp/dpr_embed_api_key"
 
 
 def _log_default(message: str) -> None:
   print(message, flush=True)
+
+
+def _load_remote_embed_api_key() -> str:
+  key_file = os.getenv("DPR_EMBED_API_KEY_FILE", _DEFAULT_REMOTE_EMBED_KEY_FILE)
+  try:
+    if key_file and os.path.exists(key_file):
+      with open(key_file, "r", encoding="utf-8") as f:
+        return str(f.read() or "").strip()
+  except Exception:
+    return ""
+  return ""
 
 
 class RemoteSentenceTransformer:
@@ -225,8 +238,9 @@ def load_sentence_transformer(
     ("modelscope", MODELSCOPE_ENDPOINT),
   ),
 ):
-  remote_endpoint = os.getenv("DPR_EMBED_API_URL")
-  if remote_endpoint:
+  remote_endpoint = _DEFAULT_REMOTE_EMBED_ENDPOINT
+  remote_api_key = _load_remote_embed_api_key()
+  if remote_endpoint and remote_api_key:
     remote_timeout_text = os.getenv("DPR_EMBED_API_TIMEOUT", str(_DEFAULT_REMOTE_TIMEOUT_SECONDS))
     try:
       remote_timeout = int(remote_timeout_text)
@@ -236,7 +250,6 @@ def load_sentence_transformer(
         f"回退默认 {_DEFAULT_REMOTE_TIMEOUT_SECONDS}"
       )
       remote_timeout = _DEFAULT_REMOTE_TIMEOUT_SECONDS
-    api_key = os.getenv("DPR_EMBED_API_KEY", "")
     log(
       f"[INFO] 使用远程 embedding 服务：model={model_name} "
       f"endpoint={str(remote_endpoint).strip()} timeout={remote_timeout}s device={device}"
@@ -244,9 +257,14 @@ def load_sentence_transformer(
     return RemoteSentenceTransformer(
       model_name=model_name,
       endpoint=str(remote_endpoint).strip(),
-      api_key=str(api_key or "").strip(),
+      api_key=remote_api_key,
       timeout=remote_timeout,
       log=log,
+    )
+  if remote_endpoint and not remote_api_key:
+    log(
+      "[INFO] 未检测到远程 embedding API key 文件，"
+      "将回退本地 SentenceTransformer 加载逻辑。"
     )
 
   if retries is None:

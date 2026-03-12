@@ -34,8 +34,6 @@ jobs:
       BLT_REWRITE_MODEL: gemini-3-flash-preview
       BLT_RERANK_MODEL: qwen3-reranker-4b
       BLT_FILTER_MODEL: gemini-3-flash-preview-nothinking
-      DPR_EMBED_API_URL: ${{ secrets.DPR_EMBED_API_URL }}
-      DPR_EMBED_API_KEY: ${{ secrets.DPR_EMBED_API_KEY }}
       DPR_EMBED_API_TIMEOUT: "60"
       PYTHONUNBUFFERED: "1"
 
@@ -135,6 +133,14 @@ jobs:
           echo "[current] $HF_HOME:"
           ls -la "$HF_HOME" || true
 
+          if [ -n "${{ secrets.DPR_EMBED_API_KEY }}" ]; then
+            echo "Preparing remote embedding key file..."
+            printf '%s' '${{ secrets.DPR_EMBED_API_KEY }}' > /tmp/dpr_embed_api_key
+            chmod 600 /tmp/dpr_embed_api_key || true
+          else
+            echo "[WARN] 未配置 DPR_EMBED_API_KEY，将回退本地 embedding。"
+          fi
+
           echo "Running main script..."
           RUN_ENRICH="${{ github.event.inputs.run_enrich }}"
           FETCH_DAYS="${{ github.event.inputs.fetch_days }}"
@@ -153,6 +159,8 @@ jobs:
 
           # 让前端可以在不配置 GitHub Token 的情况下直接读取配置（只读快照）
           cp -f config.yaml docs/config.yaml
+
+          rm -f /tmp/dpr_embed_api_key || true
 
           echo "--- post-run cache symlink check ---"
           find "$HF_HOME" -xtype l | head -n 50 || true

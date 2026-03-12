@@ -1,9 +1,11 @@
 import os
+import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
+import src.model_loader as model_loader
 from src.model_loader import RemoteSentenceTransformer, load_sentence_transformer
 
 
@@ -54,14 +56,22 @@ class RemoteSentenceTransformerTest(unittest.TestCase):
     @patch.dict(
         os.environ,
         {
-            "DPR_EMBED_API_URL": "https://embed.zwwen.online",
-            "DPR_EMBED_API_KEY": "secret",
             "DPR_EMBED_API_TIMEOUT": "45",
         },
         clear=False,
     )
-    def test_load_sentence_transformer_returns_remote_wrapper_when_env_present(self):
-        model = load_sentence_transformer("BAAI/bge-small-en-v1.5", device="cpu")
+    def test_load_sentence_transformer_returns_remote_wrapper_when_key_file_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            key_path = os.path.join(tmp, "embed.key")
+            with open(key_path, "w", encoding="utf-8") as f:
+                f.write("secret")
+            original_key_file = model_loader._DEFAULT_REMOTE_EMBED_KEY_FILE
+            try:
+                model_loader._DEFAULT_REMOTE_EMBED_KEY_FILE = key_path
+                model = load_sentence_transformer("BAAI/bge-small-en-v1.5", device="cpu")
+            finally:
+                model_loader._DEFAULT_REMOTE_EMBED_KEY_FILE = original_key_file
+
         self.assertTrue(getattr(model, "is_remote", False))
         self.assertEqual(model.model_name, "BAAI/bge-small-en-v1.5")
         self.assertEqual(model.endpoint, "https://embed.zwwen.online/embed")
